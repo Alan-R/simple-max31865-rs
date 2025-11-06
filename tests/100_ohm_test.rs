@@ -1,5 +1,5 @@
 use std::env;
-use simple_max31865::{RTDReader, RTDLeads, FilterHz, RtdError};
+use simple_max31865::{RTDReader, RTDLeads, FilterHz};
 
 const RESISTOR_TOLERANCE: f64 = 0.20; //20% tolerance for generic 100Ω resistor (80–120Ω)
 const NOMINAL_OHMS: f64 = 100.0;
