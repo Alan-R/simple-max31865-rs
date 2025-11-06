@@ -143,7 +143,7 @@ pub mod rtd_reader {
                 .map_err(|e| RtdError::Init(format!("SPI init failed: {}", e)))?;
 
             let mut inner = Max31865::new(spi, ncs).map_err(|e| RtdError::Init(match e {
-                InternalError::PinError => "NCS pin setup failed".to_string(),
+                InternalError::GpioError => "NCS pin setup failed".to_string(),
                 _ => "MAX31865 init failed".to_string(),
             }))?;
 
@@ -156,7 +156,7 @@ pub mod rtd_reader {
                 FilterHz::Fifty => 1u8,
                 _ => 0u8,  // Sixty = 0
             };
-            inner.configure(true, true, false, sensor_bit, filter_bit)
+            inner.configure(true, true, sensor_bit, filter_bit)
                 .map_err(|e| RtdError::Init(format!("Configure failed: {:?}", e)))?;
 
             Ok(RTDReader { inner })
@@ -200,7 +200,7 @@ pub mod rtd_reader {
         /// Clear any latched faults (no-op if none).
         pub fn clear_fault(&mut self) -> Result<(), RtdError> {
             self.inner.clear_fault().map_err(|e| RtdError::Read(match e {
-                InternalError::SpiErrorWrite => "Clear fault SPI write failed".to_string(),
+                InternalError::SpiErrorTransfer => "Clear fault SPI write failed".to_string(),
                 _ => "Clear fault failed".to_string(),
             }))
         }
@@ -214,10 +214,9 @@ pub mod rtd_reader {
     /// Map internal low-level errors to public RtdError.
     fn map_internal_error(e: InternalError) -> RtdError {
         match e {
-            InternalError::SpiErrorWrite | InternalError::SpiErrorTransfer | InternalError::PinError => {
+            InternalError::SpiErrorTransfer | InternalError::GpioError => {
                 RtdError::Read("SPI/GPIO transfer failed".to_string())
             }
-            InternalError::ConfigError => RtdError::Init("Invalid configuration".to_string()),
             InternalError::MAXError => RtdError::Fault(0),  // Placeholder; call read_fault_status() for real status
         }
     }
@@ -232,14 +231,10 @@ mod private {
 
     #[derive(Debug)]
     pub enum Error {
-        /// Error writing from the Max31865 chip registers
-        SpiErrorWrite,
         /// Error transferring data to/from Max31865 chip registers
         SpiErrorTransfer,
         /// Error setting the state of a pin in the GPIO bus
-        PinError,
-        /// Configuration parameters are invalid or unsupported.
-        ConfigError,
+        GpioError,
         /// The Max31865 chip declared an error when converting temperatures.
         /// Use `read_fault_status()` for details.
         MAXError,
@@ -260,7 +255,7 @@ mod private {
         pub fn new(spi: SPI, mut ncs: NCS) -> Result<Max31865<SPI, NCS>, Error> {
             let default_calib = 40000;
 
-            ncs.set_high().map_err(|_| Error::PinError)?;
+            ncs.set_high().map_err(|_| Error::GpioError)?;
             let max31865 = Max31865 {
                 spi,
                 ncs,
@@ -275,14 +270,11 @@ mod private {
             &mut self,
             vbias: bool,
             conversion_mode: bool,
-            one_shot: bool,
             sensor_type: u8,  // From public RTDLeads cast
             filter_mode: u8,   // From public FilterHz cast
         ) -> Result<(), Error> {
-            if one_shot { return Err(Error::ConfigError) };  // One-shot not supported.
             let conf: u8 = ((vbias as u8) << 7)
                 | ((conversion_mode as u8) << 6)
-                | ((one_shot as u8) << 5)
                 | (sensor_type << 4)  // Bit 4: sensor type (0 for 2/4-wire, 1 for 3-wire)
                 | filter_mode;          // Bit 0: filter (0 for 60Hz, 1 for 50Hz)
 
@@ -357,11 +349,11 @@ mod private {
             let mut write_buffer = [0u8; 2];
             write_buffer[0] = reg.read_address(); // Read addr for reg (e.g., 0x81 for 0x01)
             write_buffer[1] = 0; // Dummy data
-            self.ncs.set_low().map_err(|_| Error::PinError)?;
+            self.ncs.set_low().map_err(|_| Error::GpioError)?;
             self.spi
                 .transfer(&mut read_buffer, &write_buffer)
                 .map_err(|_| Error::SpiErrorTransfer)?;
-            self.ncs.set_high().map_err(|_| Error::PinError)?;
+            self.ncs.set_high().map_err(|_| Error::GpioError)?;
             Ok(read_buffer[1]) // Return result (ignore dummy [0])
         }
 
@@ -376,20 +368,20 @@ mod private {
             write_buffer[0] = reg.read_address(); // Read addr for reg (e.g., 0x81 for 0x01)
             write_buffer[1] = 0; // Dummy for MSB
             write_buffer[2] = 0; // Dummy for LSB
-            self.ncs.set_low().map_err(|_| Error::PinError)?;
+            self.ncs.set_low().map_err(|_| Error::GpioError)?;
             self.spi
                 .transfer(&mut read_buffer, &write_buffer)
                 .map_err(|_| Error::SpiErrorTransfer)?;
-            self.ncs.set_high().map_err(|_| Error::PinError)?;
+            self.ncs.set_high().map_err(|_| Error::GpioError)?;
             Ok([read_buffer[1], read_buffer[2]]) // Return MSB, LSB (ignore dummy [0])
         }
 
         fn write(&mut self, reg: Register, val: u8) -> Result<(), Error> {
-            self.ncs.set_low().map_err(|_| Error::PinError)?;
+            self.ncs.set_low().map_err(|_| Error::GpioError)?;
             self.spi
                 .write(&[reg.write_address(), val])
-                .map_err(|_| Error::SpiErrorWrite)?;
-            self.ncs.set_high().map_err(|_| Error::PinError)?;
+                .map_err(|_| Error::SpiErrorTransfer)?;
+            self.ncs.set_high().map_err(|_| Error::GpioError)?;
             Ok(())
         }
     }
