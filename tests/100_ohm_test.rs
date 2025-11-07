@@ -1,3 +1,25 @@
+/// The 100 Ohm resistor test.
+///
+/// Purpose of this test - to validate basic setup without having or relying
+/// on a PT100 probe. This is great if you want to validate your configuration
+/// without being dependent on a PT100 or ambient temperature
+/// A 100 ohm resistor exactly simulates a PT100 at 0 degrees C.
+///
+///    Schematic for 100 Ohm resistor test
+///
+///           (100 ohm resistor)
+///           +---v\/\/\/\/----+
+///           |                |
+///           |                |
+///     +-----+                +-----+
+///     |     |                |     |
+///     +     +                +     +
+///    FRC+  RTD+             RTD-  FRC-
+///
+/// Wired this way it can be configured as either a 2 or 4 wire RTD probe
+/// Ideally you'll use a 1% resistor or better.
+//
+
 use std::env;
 use simple_max31865::{RTDReader, RTDLeads, FilterHz};
 

@@ -10,7 +10,6 @@
 // TODO: get down to a single Error type: Replace private Error with RtdError
 // TODO: Pass READLeads and FilterHz along to private configure()
 // TODO: Enable no_std => ![cfg_attr(not(test), no_std)]
-// TODO: Create ASCII-art picture of 100 ohm resistor setup
 // TODO: Stub off hardware access in abstract Trait(s) and
 //       create hardware-free unit tests with mocked hardware (see other branches for examples).
 // TODO: Create an ice bath manual test program - watch temperatures go down and up
