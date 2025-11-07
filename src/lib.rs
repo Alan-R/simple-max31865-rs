@@ -22,7 +22,7 @@
 //      5. Instruct user to remove probe from the bath
 //      6. Display temperatures every second in a loop,
 //         which stops after 5 minutes, or when the temperature reaches
-//         60 degrees F or so.// FIXME: figure out what to do about this...
+//         60 degrees F or so.
 //
 // TODO: Stub off hardware access by creating abstract implementations of Trait(s) and
 //       create minimal Mock unit tests to validate basic abstract operations.
