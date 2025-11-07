@@ -2,9 +2,30 @@
 //!
 //! # References
 //! - Datasheet: https://datasheets.maximintegrated.com/en/ds/MAX31865.pdf
+//! - Wiring diagrams:  https://www.playingwithfusion.com/docs/1203
+//!
 
-// FIXME: figure out what to do about this...
-// #![cfg_attr(not(test), no_std)]
+// TODO: Update and improve README (see other branches), esp sample code
+// TODO: Improve and test fault handling, add to README test case
+// TODO: get down to a single Error type: Replace private Error with RtdError
+// TODO: Pass READLeads and FilterHz along to private configure()
+// TODO: Enable no_std => ![cfg_attr(not(test), no_std)]
+// TODO: Create ASCII-art picture of 100 ohm resistor setup
+// TODO: Stub off hardware access in abstract Trait(s) and
+//       create hardware-free unit tests with mocked hardware (see other branches for examples).
+// TODO: Create an ice bath manual test program - watch temperatures go down and up
+//
+//  Requirements for ice bath test
+//      1. Explain to the user what's going to happen
+//      2. Verify temperature is in the range above 40, under 110 F
+//      3. Prompt user to put the probe in the ice bath
+//      4. Display temperatures every second in a loop,
+//         which stops after 5 minutes, or when the temperature reaches
+//         35 degrees F or so.
+//      5. Instruct user to remove probe from the bath
+//      6. Display temperatures every second in a loop,
+//         which stops after 5 minutes, or when the temperature reaches
+//         60 degrees F or so.// FIXME: figure out what to do about this...
 
 use embedded_hal::digital::OutputPin;
 use embedded_hal::spi::{Mode, Phase, Polarity, SpiBus};
