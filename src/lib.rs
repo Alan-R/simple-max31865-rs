@@ -67,6 +67,7 @@
 //         hardware for the benefit of mock tests. Ability to inject faults and control
 //         contents of hardware registers will be added as needed for tests.
 //
+
 use embedded_hal::digital::OutputPin;
 use embedded_hal::spi::{Mode, Phase, Polarity, SpiBus};
 extern crate alloc;
