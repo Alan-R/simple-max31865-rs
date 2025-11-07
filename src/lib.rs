@@ -8,7 +8,6 @@
 // TODO: Update and improve README (see other branches), esp sample code
 // TODO: Improve and test fault handling, add to README test case
 // TODO: get down to a single Error type: Replace private Error with RtdError
-// TODO: Pass READLeads and FilterHz along to private configure()
 // TODO: Enable no_std => ![cfg_attr(not(test), no_std)]
 // TODO: Stub off hardware access in abstract Trait(s) and
 //       create hardware-free unit tests with mocked hardware (see other branches for examples).
@@ -166,17 +165,7 @@ pub mod rtd_reader {
                 InternalError::GpioError => "NCS pin setup failed".to_string(),
                 _ => "MAX31865 init failed".to_string(),
             }))?;
-
-            // Pass leads and filter directly (cast to u8 for config bits)
-            let sensor_bit = match leads {
-                RTDLeads::Three => 1u8,
-                _ => 0u8,  // Two or Four = 0
-            };
-            let filter_bit = match filter {
-                FilterHz::Fifty => 1u8,
-                _ => 0u8,  // Sixty = 0
-            };
-            inner.configure(true, true, sensor_bit, filter_bit)
+            inner.configure(true, true, leads, filter)
                 .map_err(|e| RtdError::Init(format!("Configure failed: {:?}", e)))?;
 
             Ok(RTDReader { inner })
@@ -290,9 +279,19 @@ mod private {
             &mut self,
             vbias: bool,
             conversion_mode: bool,
-            sensor_type: u8,  // From public RTDLeads cast
-            filter_mode: u8,   // From public FilterHz cast
+            sensor_type_enum: RTDLeads,  // From public RTDLeads cast
+            filter_mode_enum: FilterHz,   // From public FilterHz cast
         ) -> Result<(), Error> {
+
+            // Compute sensor type and filter mode bits directly
+            let sensor_type = match sensor_type_enum {
+                RTDLeads::Three => 1u8,
+                RTDLeads::Two | RTDLeads::Four => 0u8,  // Two or Four = 0
+            };
+            let filter_mode = match filter_mode_enum {
+                FilterHz::Fifty => 1u8,  // Fifty = 1 (low order bit)
+                FilterHz::Sixty => 0u8,  // Sixty = 0 (no lower order bits)
+            };
             let conf: u8 = ((vbias as u8) << 7)
                 | ((conversion_mode as u8) << 6)
                 | (sensor_type << 4)  // Bit 4: sensor type (0 for 2/4-wire, 1 for 3-wire)
