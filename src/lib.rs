@@ -7,10 +7,9 @@
 
 // TODO: Update and improve README (see other branches), esp sample code
 // TODO: Improve and test fault handling, add to README test case
-// TODO: get down to a single Error type: Replace private Error with RtdError
+// TODO: Enhance RtdError to differentiate between Pin and Spi (transfer) errors.
+// TODO: get down to a single Error type: Use RtdError directly in private code,
 // TODO: Enable no_std => ![cfg_attr(not(test), no_std)]
-// TODO: Stub off hardware access in abstract Trait(s) and
-//       create hardware-free unit tests with mocked hardware (see other branches for examples).
 // TODO: Create an ice bath manual test program - watch temperatures go down and up
 //
 //  Requirements for ice bath test
@@ -24,7 +23,50 @@
 //      6. Display temperatures every second in a loop,
 //         which stops after 5 minutes, or when the temperature reaches
 //         60 degrees F or so.// FIXME: figure out what to do about this...
-
+//
+// TODO: Stub off hardware access by creating abstract implementations of Trait(s) and
+//       create minimal Mock unit tests to validate basic abstract operations.
+//       This implementation shall be available only under a "mock" feature.
+//
+//  Requirements for Traits
+//      1. All traits must use RTDError as their error class
+//      2. Must include an SPI abstraction and a Pin abstraction
+//      3. Pin abstraction must implement raise and lower APIs, and include raise and lower APIs,
+//         and implement at least OutputPins, with the ability create them with pullups or pulldowns
+//         Creation must check for range of pin number.
+//      4. SPI abstraction must implement transfer
+//          (pub fn new(cs_pin: u8, leads: RTDLeads, filter: FilterHz) -> Result<Self, RtdError>)
+//      5. SPI constructor/new must take current SPI parameters
+//      6. SPI abstraction must implement transfer API
+//      7. Traits shall have zero effect on top level (public) API
+//      8. Traits shall not change interactions with real hardware.
+//         Do not "improve" the real hardware interactions. That code is well-proven.
+//         This should be an "of course" kind of thing.
+//
+// TODO: Create mock implementation of SPI and Pin abstractions
+//
+//      1. switching between mock and real APIs shall be controlled by a feature called "mock".
+//         Without the mock feature, the hardware implementation of the traits shall be used
+//         and with it enabled, the mock version shall be used.
+//      2. The mock implementation of SPI transfers shall assume transfer is to known
+//         MAX31865 registers and verify correct interaction with the mocked hardware
+//         by callers.
+//      4. Minimal mock tests to verify basic mocked calls don't fail shall be included.
+//         See also next to-do item. These tests are to validate the mock implementation.
+//      5. "Real" hardware shall not be available when "mock" feature is selected.
+//      5. Mock hardware shall not change interactions with real hardware at all.
+//         This should be an "of-course" kind of thing
+//
+// TODO: Create "mock" hardware tests which exercise and test the APIs with mock feature.
+//       The purpose of this is to test our normal interactions with the hardware and
+//       also exercise error legs that are impossible to create automatically in real hardware.
+//
+//      1. Mocked hardware tests shall exercise underlying hardware and create error
+//         situations which are difficult to create in real hardware
+//      2. Mock test only API calls shall be created which inject faults and control
+//         hardware for the benefit of mock tests. Ability to inject faults and control
+//         contents of hardware registers will be added as needed for tests.
+//
 use embedded_hal::digital::OutputPin;
 use embedded_hal::spi::{Mode, Phase, Polarity, SpiBus};
 extern crate alloc;
