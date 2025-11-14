@@ -22,7 +22,7 @@
 //      5. Instruct user to remove probe from the bath
 //      6. Display temperatures every second in a loop,
 //         which stops after 5 minutes, or when the temperature reaches
-//         60 degrees F or so.
+//         60 degrees F or so.// FIXME: figure out what to do about this...
 //
 // TODO: Stub off hardware access by creating abstract implementations of Trait(s) and
 //       create minimal Mock unit tests to validate basic abstract operations.
@@ -67,7 +67,6 @@
 //         hardware for the benefit of mock tests. Ability to inject faults and control
 //         contents of hardware registers will be added as needed for tests.
 //
-
 use embedded_hal::digital::OutputPin;
 use embedded_hal::spi::{Mode, Phase, Polarity, SpiBus};
 extern crate alloc;
@@ -208,7 +207,7 @@ pub mod rtd_reader {
                 InternalError::GpioError => "NCS pin setup failed".to_string(),
                 _ => "MAX31865 init failed".to_string(),
             }))?;
-            inner.configure(true, true, leads, filter)
+            inner.configure(leads, filter)
                 .map_err(|e| RtdError::Init(format!("Configure failed: {:?}", e)))?;
 
             Ok(RTDReader { inner })
@@ -296,6 +295,7 @@ mod private {
         spi: SPI,
         ncs: NCS,
         calibration: u32,
+        base_config: u8,  // Set in configure
     }
 
     impl<SPI, NCS> Max31865<SPI, NCS>
@@ -311,17 +311,28 @@ mod private {
             let max31865 = Max31865 {
                 spi,
                 ncs,
-                calibration: default_calib, /* value in ohms multiplied by 100 */
+                calibration: default_calib,
+                base_config: 0,  // Set in configure
             };
 
             Ok(max31865)
         }
 
+        // From MAX31865 datasheet (page 16, Table 8):
+        //
+        // Bit 7 (V_BIAS): 1 = enable bias excitation (should be 1).
+        // Bit 6 (1-SHOT): 0 = continuous conversion (ongoing reads),
+        //                 1 = one-shot (single conversion, then stop).
+        // Bit 5: Reserved (should be 0)
+        // Bit 4 (wires): 1 = 3-wire PT100, 0 = 2 or 4-wire
+        // Bit 3 (AUTO-CONVERT): 1 = auto-conversion enabled
+        // Bit 2: Reserved (should be 0)
+        // Bit 1: Reserved (should be 0)
+        // Bit 0 (50/60Hz): 0 = 60Hz, 1 = 50 hz
+
         /// Updates the devices configuration (internal use only).
         pub fn configure(
             &mut self,
-            vbias: bool,
-            conversion_mode: bool,
             sensor_type_enum: RTDLeads,  // From public RTDLeads cast
             filter_mode_enum: FilterHz,   // From public FilterHz cast
         ) -> Result<(), Error> {
@@ -335,12 +346,12 @@ mod private {
                 FilterHz::Fifty => 1u8,  // Fifty = 1 (low order bit)
                 FilterHz::Sixty => 0u8,  // Sixty = 0 (no lower order bits)
             };
-            let conf: u8 = ((vbias as u8) << 7)
-                | ((conversion_mode as u8) << 6)
-                | (sensor_type << 4)  // Bit 4: sensor type (0 for 2/4-wire, 1 for 3-wire)
-                | filter_mode;          // Bit 0: filter (0 for 60Hz, 1 for 50Hz)
-
-            self.write(Register::CONFIG, conf)?;
+            // One-shot config: V_BIAS=1, 1-SHOT=1, wires, filter (no AUTO= bit 3=0)
+            self.base_config = (1u8 << 7)  // V_BIAS=1
+                | (1u8 << 6)  // 1-SHOT=1 (triggers on write)
+                | (sensor_type << 4)  // Wires bit 4
+                | filter_mode;  // Filter bit 0
+            self.write(Register::CONFIG, self.base_config)?;  // Initial write (starts first conversion)
             self.clear_fault()?; // Unlatch any boot faults (mimics Adafruit init)
 
             Ok(())
@@ -398,10 +409,26 @@ mod private {
         /// resistor). See manual for further information.
         /// The last bit specifies if the conversion was successful.
         pub fn read_raw(&mut self) -> Result<u16, Error> {
-            let buffer = self.read_two(Register::RTD_MSB)?; // Single read_two on MSB clocks MSB + LSB
-            let raw = ((buffer[0] as u16) << 8) | (buffer[1] as u16); // buffer[0] = MSB, [1] = LSB
-            if raw & 1 != 0 { // LSB bit 0 = 1 = fault during read
-                return Err(Error::MAXError);
+            // Trigger new conversion: Write config (1-SHOT=1 starts it)
+            self.write(Register::CONFIG, self.base_config)?;
+
+            // Wait for conversion (100ms conservative >65ms datasheet min)
+            std::thread::sleep(std::time::Duration::from_millis(100));
+
+            // Read RTD
+            let buffer = self.read_two(Register::RTD_MSB)?;
+            let raw = ((buffer[0] as u16) << 8) | (buffer[1] as u16);
+            if raw & 1 != 0 {  // Fault: Clear + retry once
+                let _ = self.read_fault_status();  // Reads + clears faults
+                // Retry: Trigger again
+                self.write(Register::CONFIG, self.base_config)?;
+                std::thread::sleep(std::time::Duration::from_millis(100));
+                let retry_buffer = self.read_two(Register::RTD_MSB)?;
+                let retry_raw = ((retry_buffer[0] as u16) << 8) | (retry_buffer[1] as u16);
+                if retry_raw & 1 != 0 {
+                    return Err(Error::MAXError);  // Retry failed
+                }
+                return Ok(retry_raw);
             }
             Ok(raw)
         }
