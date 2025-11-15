@@ -1,11 +1,11 @@
 [package]
-name = "simple_max31865"
-version = "1.0.0"
+name = "simple-max31865"
+version = "1.0.0"  # Bumped for initial publish (stable API, but first release)
 authors = ["Alan Robertson <alanr@unix.sh>"]
 keywords = ["embedded-hal-v1", "rtd-sensor", "max31865"]
-categories = ["embedded", "no-std", "hardware-support"]
+categories = ["embedded", "hardware-support"]
 description = "Easy-to-use driver for the MAX31865 RTD to Digital converter (Raspberry Pi focus)"
-documentation = "https://github.com/emeric-martineau/rs-max31865"
+documentation = "https://docs.rs/simple-max31865"  # Standard for crates.io; will auto-generate on publish
 repository = "https://github.com/Alan-R/simple-max31865-rs"
 readme = "README.md"
 license = "MIT OR Apache-2.0"
@@ -21,8 +21,6 @@ clap = { version = "4.0", features = ["derive"] }  # For CLI args in examples
 [[example]]
 name = "ice_bath_test"
 path = "examples/ice_bath_test.rs"
-# required-features = ["doc"]  # If you want to tie it to the doc feature
-
 
 [profile.test]
 lto = "thin"        # Enables link-time optimization: Strips unused symbols (e.g., test harness bloat) like in your main binary
@@ -39,4 +37,4 @@ test = true
 path = "src/lib.rs"
 
 [features]
-doc = []
+# Removed empty 'doc' feature; add back if needed for conditional compilation

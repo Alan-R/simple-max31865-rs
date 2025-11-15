@@ -10,7 +10,7 @@
 // MAX31865_FILTER: String parsed to enum (e.g., 50 or Fifty).
 // Precedence: CLI arg > env var > default.
 
-use simple_max31865::{decode_fault_status, FilterHz, RTDLeads, RTDReader, RtdError};
+use simple_max31865::{decode_fault_status, FilterHz, RTDLeads, RTDReader};
 use std::env;
 use std::io;
 use std::time::{Duration, Instant};
@@ -141,7 +141,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Resistance: {:.2} ohms", resistance);
     println!("Temperature: {:.1}°F ({:.1}°C)", temp_f, temp_c);
 
-    if temp_f < 40.0 || temp_f > 110.0 {
+    if !(40.0..=110.0).contains(&temp_f) {
+
         eprintln!("Initial temp {:.1}°F out of range (expected 40-110°F).", temp_f);
         eprintln!("Raw: 0x{:04X} (LSB fault: {}) | Resistance: {:.2} ohms | Temp: {:.1}°C", raw, raw & 1, resistance, temp_c);
         eprintln!("Likely wiring/sensor issue: Check RTD connections (expected ~108 ohms at room temp, raw ~0x6A80).");
@@ -259,7 +260,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Initial: {:.1}°F", initial_temp_f);
     println!("Bath min: {:.1}°F (expected ~32°F)", min_temp_f);
     println!("Recovery final: {:.1}°F (expected near initial)", final_temp_f);
-    if min_temp_f < 30.0 || min_temp_f > 34.0 {
+    if  !(30.0..=34.0).contains(&min_temp_f){
         println!("Potential issue: Bath temp off from 32°F. Recheck setup or compare to reference code.");
     } else {
         println!("Test passed! Sensor behaving as expected.");
