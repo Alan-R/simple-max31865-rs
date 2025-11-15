@@ -4,21 +4,22 @@ A generic driver for the MAX31865 RTD to Digital converter
 
 ## [Documentation](https://rudihorn.github.io/max31865/max31865/index.html)
 
-## [Examples](https://github.com/rudihorn/max31865/tree/extra_examples/examples)
+## [Examples](https://github.com/Alan-R/simple-max31865-rs/tree/updates/examples)
+Examples are in the *examples* directory from the root of the tree.
 
 ## What works
 
-- reading the raw value and the converted temperature value
+- reading the raw value and the converted temperature value either in f64 or scaled integer forms.
+- Detecting and recovering from errors
 - setting the ohmic calibration value
-- configuring V_BIAS, one shot, filter frequency
+- Interaction with the chip works well.
+- Reading temperatures and resistances from PT-100 sensors.
 
 ## TODO
 
-- [ ] Fault tolerance / detection / status
+- Working with the PT-1000 sensors
+- Many other thoughts listed in the src/lib.rs file.
 
-## Examples
-
-There is an example for the Raspberry pi in the examples directory.
 
 ## License
 

@@ -3,26 +3,15 @@
 //! # References
 //! - Datasheet: https://datasheets.maximintegrated.com/en/ds/MAX31865.pdf
 //! - Wiring diagrams:  https://www.playingwithfusion.com/docs/1203
+//! - SPECIAL NOTE: The chip does _not_ implement continuous mode, in spite of the docs.
 //!
 
-// TODO: Update and improve README (see other branches), esp sample code
+// TODO: Update and improve README (see other branches), esp sample code.
+// TODO: Add PT-1000 support.
 // TODO: Improve and test fault handling, add to README test case
 // TODO: Enhance RtdError to differentiate between Pin and Spi (transfer) errors.
-// TODO: get down to a single Error type: Use RtdError directly in private code,
+// TODO: get down to a single Error type: Use RtdError directly in private code.
 // TODO: Enable no_std => ![cfg_attr(not(test), no_std)]
-// TODO: Create an ice bath manual test program - watch temperatures go down and up
-//
-//  Requirements for ice bath test
-//      1. Explain to the user what's going to happen
-//      2. Verify temperature is in the range above 40, under 110 F
-//      3. Prompt user to put the probe in the ice bath
-//      4. Display temperatures every second in a loop,
-//         which stops after 5 minutes, or when the temperature reaches
-//         35 degrees F or so.
-//      5. Instruct user to remove probe from the bath
-//      6. Display temperatures every second in a loop,
-//         which stops after 5 minutes, or when the temperature reaches
-//         60 degrees F or so.// FIXME: figure out what to do about this...
 //
 // TODO: Stub off hardware access by creating abstract implementations of Trait(s) and
 //       create minimal Mock unit tests to validate basic abstract operations.
@@ -257,8 +246,8 @@ pub mod rtd_reader {
         }
 
         /// Set calibration (ohms * 100, e.g., 40000 for 400Ω).
-        pub fn set_calibration(&mut self, calib: u32) {
-            self.inner.set_calibration(calib);
+        pub fn set_calibration(&mut self, calibration: u32) {
+            self.inner.set_calibration(calibration);
         }
     }
 
@@ -305,13 +294,13 @@ mod private {
     {
         /// Create a new MAX31865 module (internal use only).
         pub fn new(spi: SPI, mut ncs: NCS) -> Result<Max31865<SPI, NCS>, Error> {
-            let default_calib = 40000;
+            let default_calibration = 40000;
 
             ncs.set_high().map_err(|_| Error::GpioError)?;
             let max31865 = Max31865 {
                 spi,
                 ncs,
-                calibration: default_calib,
+                calibration: default_calibration,
                 base_config: 0,  // Set in configure
             };
 
@@ -370,8 +359,8 @@ mod private {
         }
 
         /// Set the calibration reference resistance (internal use only).
-        pub fn set_calibration(&mut self, calib: u32) {
-            self.calibration = calib;
+        pub fn set_calibration(&mut self, calibration: u32) {
+            self.calibration = calibration;
         }
 
         /// Read the raw resistance value.
@@ -398,7 +387,7 @@ mod private {
         /// The output value is the value in degrees Celsius multiplied by 100.
         pub fn read_default_conversion(&mut self) -> Result<i32, Error> {
             let ohms = self.read_ohms()?;
-            let temp = super::temp_conversion::LOOKUP_VEC_PT100.lookup_temperature(ohms as i32);
+            let temp = temp_conversion::LOOKUP_VEC_PT100.lookup_temperature(ohms as i32);
             Ok(temp)
         }
 
