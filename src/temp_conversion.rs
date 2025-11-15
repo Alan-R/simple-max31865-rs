@@ -62,8 +62,8 @@ where
     }
 
     fn interpolate_index(&self, ohm_100: i32, index: usize) -> i32 {
-        let first = (self.reverse_index(index) as i32, self.lookup(index));
-        let second = (self.reverse_index(index + 1) as i32, self.lookup(index + 1));
+        let first = (self.reverse_index(index), self.lookup(index));
+        let second = (self.reverse_index(index + 1), self.lookup(index + 1));
         interpolate(ohm_100, first, second)
     }
 
@@ -72,8 +72,8 @@ where
     /// # Arguments
     ///
     /// * `val` - A 16 bit unsigned integer specifying the resistance in Ohms
-    /// multiplied by 100, e.g. 13851 would indicate 138.51 Ohms and convert to 100
-    /// degrees Celsius.
+    ///   multiplied by 100, e.g. 13851 would indicate 138.51 Ohms and convert to 100
+    ///   degrees Celsius.
     ///
     /// # Remarks
     ///
@@ -92,7 +92,7 @@ where
                 Ok(val) => val,
                 Err(val) => val - 1,
             };
-            self.interpolate_index(ohm_100 as i32, index)
+            self.interpolate_index(ohm_100, index)
         }
     }
 }

@@ -1,12 +1,12 @@
 [package]
-name = "simple_max31865"
-version = "1.0.0"
-authors = ["Rudi Horn <dyn-git@rudi-horn.de>", "Emeric Martineau <11473190+emeric-martineau@users.noreply.github.com>"]
+name = "simple-max31865"
+version = "1.0.0"  # Bumped for initial publish (stable API, but first release)
+authors = ["Alan Robertson <alanr@unix.sh>"]
 keywords = ["embedded-hal-v1", "rtd-sensor", "max31865"]
-categories = ["embedded", "no-std", "hardware-support"]
-description = "Simplified driver for the MAX31865 RTD to Digital converter (Raspberry Pi focus)"
-documentation = "https://github.com/emeric-martineau/rs-max31865"
-repository = "https://github.com/emeric-martineau/rs-max31865.git"
+categories = ["embedded", "hardware-support"]
+description = "Easy-to-use driver for the MAX31865 RTD to Digital converter (Raspberry Pi focus)"
+documentation = "https://docs.rs/simple-max31865"  # Standard for crates.io; will auto-generate on publish
+repository = "https://github.com/Alan-R/simple-max31865-rs"
 readme = "README.md"
 license = "MIT OR Apache-2.0"
 edition = "2021"
@@ -15,17 +15,12 @@ edition = "2021"
 rppal = { version = "0.17", features = ["embedded-hal"] }  # Enables embedded-hal v1 traits for SpiBus, OutputPin, etc.
 embedded-hal = "1.0"  # Ensure v1
 
-[target.thumbv7m-none-eabi.dev-dependencies]
-cortex-m-semihosting = "0.3.7"
-cortex-m = "0.7.2"
-cortex-m-rt = "0.6.13"
-panic-halt = "0.2.0"
-stm32f1xx-hal = { version = "0.7.0", features = ["stm32f103"] }
-embedded-graphics = "0.6.2"
-ssd1306 = "0.5.1"
+[dev-dependencies]
+clap = { version = "4.0", features = ["derive"] }  # For CLI args in examples
 
-#[target.'cfg(unix)'.dev-dependencies]
-#linux-embedded-hal = "0.3.0"
+[[example]]
+name = "ice_bath_test"
+path = "examples/ice_bath_test.rs"
 
 [profile.test]
 lto = "thin"        # Enables link-time optimization: Strips unused symbols (e.g., test harness bloat) like in your main binary
@@ -42,4 +37,4 @@ test = true
 path = "src/lib.rs"
 
 [features]
-doc = []
+# Removed empty 'doc' feature; add back if needed for conditional compilation

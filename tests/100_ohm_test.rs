@@ -1,3 +1,6 @@
+use std::env;
+#[cfg(any(target_arch = "arm", target_arch = "aarch64"))]
+use simple_max31865::{RTDReader, RTDLeads, FilterHz};
 /// The 100 Ohm resistor test.
 ///
 /// Purpose of this test - to validate basic setup without having or relying
@@ -16,24 +19,26 @@
 ///     +     +                +     +
 ///    FRC+  RTD+             RTD-  FRC-
 ///
-/// Wired this way it can be configured as either a 2 or 4 wire RTD probe
-/// Ideally you'll use a 1% resistor or better.
-//
-
-use std::env;
-use simple_max31865::{RTDReader, RTDLeads, FilterHz};
-
+/// Wired this way it can be configured as either a 2 or 4 wire RTD probe.
+/// Ideally, you'll use a 1% resistor or better.
+#[cfg(any(target_arch = "arm", target_arch = "aarch64"))]
 const RESISTOR_TOLERANCE: f64 = 0.20; //20% tolerance for generic 100Ω resistor (80–120Ω)
+#[cfg(any(target_arch = "arm", target_arch = "aarch64"))]
 const NOMINAL_OHMS: f64 = 100.0;
+#[cfg(any(target_arch = "arm", target_arch = "aarch64"))]
 const MIN_OHMS: f64 = NOMINAL_OHMS * (1.0 - RESISTOR_TOLERANCE); //80.0
+#[cfg(any(target_arch = "arm", target_arch = "aarch64"))]
 const MAX_OHMS: f64 = NOMINAL_OHMS * (1.0 + RESISTOR_TOLERANCE); //120.0
 
+#[cfg(any(target_arch = "arm", target_arch = "aarch64"))]
 /// PT100 linear approximation: T = (R / 100 - 1) / 0.003851 (valid 0–300°C, per datasheet 5).
 const fn pt100_temperature_from_ohms(ohms: f64) -> f64 {
     (ohms / 100.0 - 1.0) / 0.003851
 }
 
+#[cfg(any(target_arch = "arm", target_arch = "aarch64"))]
 const MIN_TEMP_C: f64 = pt100_temperature_from_ohms(MIN_OHMS); // -52.5°C
+#[cfg(any(target_arch = "arm", target_arch = "aarch64"))]
 const MAX_TEMP_C: f64 = pt100_temperature_from_ohms(MAX_OHMS); // 51.9°C
 
 fn get_pin_or_default(var_name: &str, default: u8) -> u8 {

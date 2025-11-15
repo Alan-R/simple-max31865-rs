@@ -3,26 +3,15 @@
 //! # References
 //! - Datasheet: https://datasheets.maximintegrated.com/en/ds/MAX31865.pdf
 //! - Wiring diagrams:  https://www.playingwithfusion.com/docs/1203
+//! - SPECIAL NOTE: The chip does _not_ implement continuous mode, in spite of the docs.
 //!
 
-// TODO: Update and improve README (see other branches), esp sample code
+// TODO: Update and improve README (see other branches), esp sample code.
+// TODO: Add PT-1000 support.
 // TODO: Improve and test fault handling, add to README test case
 // TODO: Enhance RtdError to differentiate between Pin and Spi (transfer) errors.
-// TODO: get down to a single Error type: Use RtdError directly in private code,
+// TODO: get down to a single Error type: Use RtdError directly in private code.
 // TODO: Enable no_std => ![cfg_attr(not(test), no_std)]
-// TODO: Create an ice bath manual test program - watch temperatures go down and up
-//
-//  Requirements for ice bath test
-//      1. Explain to the user what's going to happen
-//      2. Verify temperature is in the range above 40, under 110 F
-//      3. Prompt user to put the probe in the ice bath
-//      4. Display temperatures every second in a loop,
-//         which stops after 5 minutes, or when the temperature reaches
-//         35 degrees F or so.
-//      5. Instruct user to remove probe from the bath
-//      6. Display temperatures every second in a loop,
-//         which stops after 5 minutes, or when the temperature reaches
-//         60 degrees F or so.// FIXME: figure out what to do about this...
 //
 // TODO: Stub off hardware access by creating abstract implementations of Trait(s) and
 //       create minimal Mock unit tests to validate basic abstract operations.
@@ -163,9 +152,6 @@ pub fn decode_fault_status(status: u8) -> Vec<&'static str> {
     faults
 }
 
-#[cfg(feature = "doc")]
-pub mod examples;
-
 pub const MODE: Mode = Mode {
     phase: Phase::CaptureOnSecondTransition,
     polarity: Polarity::IdleHigh,
@@ -204,10 +190,10 @@ pub mod rtd_reader {
                 .map_err(|e| RtdError::Init(format!("SPI init failed: {}", e)))?;
 
             let mut inner = Max31865::new(spi, ncs).map_err(|e| RtdError::Init(match e {
-                InternalError::GpioError => "NCS pin setup failed".to_string(),
+                InternalError::GpioFault => "NCS pin setup failed".to_string(),
                 _ => "MAX31865 init failed".to_string(),
             }))?;
-            inner.configure(true, true, leads, filter)
+            inner.configure(leads, filter)
                 .map_err(|e| RtdError::Init(format!("Configure failed: {:?}", e)))?;
 
             Ok(RTDReader { inner })
@@ -257,18 +243,18 @@ pub mod rtd_reader {
         }
 
         /// Set calibration (ohms * 100, e.g., 40000 for 400Ω).
-        pub fn set_calibration(&mut self, calib: u32) {
-            self.inner.set_calibration(calib);
+        pub fn set_calibration(&mut self, calibration: u32) {
+            self.inner.set_calibration(calibration);
         }
     }
 
     /// Map internal low-level errors to public RtdError.
     fn map_internal_error(e: InternalError) -> RtdError {
         match e {
-            InternalError::SpiErrorTransfer | InternalError::GpioError => {
+            InternalError::SpiErrorTransfer | InternalError::GpioFault => {
                 RtdError::Read("SPI/GPIO transfer failed".to_string())
             }
-            InternalError::MAXError => RtdError::Fault(0),  // Placeholder; call read_fault_status() for real status
+            InternalError::MAXFault => RtdError::Fault(0),  // Placeholder; call read_fault_status() for real status
         }
     }
 }
@@ -285,16 +271,17 @@ mod private {
         /// Error transferring data to/from Max31865 chip registers
         SpiErrorTransfer,
         /// Error setting the state of a pin in the GPIO bus
-        GpioError,
+        GpioFault,
         /// The Max31865 chip declared an error when converting temperatures.
         /// Use `read_fault_status()` for details.
-        MAXError,
+        MAXFault,
     }
 
     pub struct Max31865<SPI, NCS> {
         spi: SPI,
         ncs: NCS,
         calibration: u32,
+        base_config: u8,  // Set in configure
     }
 
     impl<SPI, NCS> Max31865<SPI, NCS>
@@ -304,23 +291,34 @@ mod private {
     {
         /// Create a new MAX31865 module (internal use only).
         pub fn new(spi: SPI, mut ncs: NCS) -> Result<Max31865<SPI, NCS>, Error> {
-            let default_calib = 40000;
+            let default_calibration = 40000;
 
-            ncs.set_high().map_err(|_| Error::GpioError)?;
+            ncs.set_high().map_err(|_| Error::GpioFault)?;
             let max31865 = Max31865 {
                 spi,
                 ncs,
-                calibration: default_calib, /* value in ohms multiplied by 100 */
+                calibration: default_calibration,
+                base_config: 0,  // Set in configure
             };
 
             Ok(max31865)
         }
 
+        // From MAX31865 datasheet (page 16, Table 8):
+        //
+        // Bit 7 (V_BIAS): 1 = enable bias excitation (should be 1).
+        // Bit 6 (1-SHOT): 0 = continuous conversion (ongoing reads),
+        //                 1 = one-shot (single conversion, then stop).
+        // Bit 5: Reserved (should be 0)
+        // Bit 4 (wires): 1 = 3-wire PT100, 0 = 2 or 4-wire
+        // Bit 3 (AUTO-CONVERT): 1 = auto-conversion enabled
+        // Bit 2: Reserved (should be 0)
+        // Bit 1: Reserved (should be 0)
+        // Bit 0 (50/60Hz): 0 = 60Hz, 1 = 50 hz
+
         /// Updates the devices configuration (internal use only).
         pub fn configure(
             &mut self,
-            vbias: bool,
-            conversion_mode: bool,
             sensor_type_enum: RTDLeads,  // From public RTDLeads cast
             filter_mode_enum: FilterHz,   // From public FilterHz cast
         ) -> Result<(), Error> {
@@ -334,12 +332,12 @@ mod private {
                 FilterHz::Fifty => 1u8,  // Fifty = 1 (low order bit)
                 FilterHz::Sixty => 0u8,  // Sixty = 0 (no lower order bits)
             };
-            let conf: u8 = ((vbias as u8) << 7)
-                | ((conversion_mode as u8) << 6)
-                | (sensor_type << 4)  // Bit 4: sensor type (0 for 2/4-wire, 1 for 3-wire)
-                | filter_mode;          // Bit 0: filter (0 for 60Hz, 1 for 50Hz)
-
-            self.write(Register::CONFIG, conf)?;
+            // One-shot config: V_BIAS=1, 1-SHOT=1, wires, filter (no AUTO= bit 3=0)
+            self.base_config = (1u8 << 7)  // V_BIAS=1
+                | (1u8 << 6)  // 1-SHOT=1 (triggers on write)
+                | (sensor_type << 4)  // Wires bit 4
+                | filter_mode;  // Filter bit 0
+            self.write(Register::CONFIG, self.base_config)?;  // Initial write (starts first conversion)
             self.clear_fault()?; // Unlatch any boot faults (mimics Adafruit init)
 
             Ok(())
@@ -358,8 +356,8 @@ mod private {
         }
 
         /// Set the calibration reference resistance (internal use only).
-        pub fn set_calibration(&mut self, calib: u32) {
-            self.calibration = calib;
+        pub fn set_calibration(&mut self, calibration: u32) {
+            self.calibration = calibration;
         }
 
         /// Read the raw resistance value.
@@ -386,7 +384,7 @@ mod private {
         /// The output value is the value in degrees Celsius multiplied by 100.
         pub fn read_default_conversion(&mut self) -> Result<i32, Error> {
             let ohms = self.read_ohms()?;
-            let temp = super::temp_conversion::LOOKUP_VEC_PT100.lookup_temperature(ohms as i32);
+            let temp = temp_conversion::LOOKUP_VEC_PT100.lookup_temperature(ohms as i32);
             Ok(temp)
         }
 
@@ -397,10 +395,26 @@ mod private {
         /// resistor). See manual for further information.
         /// The last bit specifies if the conversion was successful.
         pub fn read_raw(&mut self) -> Result<u16, Error> {
-            let buffer = self.read_two(Register::RTD_MSB)?; // Single read_two on MSB clocks MSB + LSB
-            let raw = ((buffer[0] as u16) << 8) | (buffer[1] as u16); // buffer[0] = MSB, [1] = LSB
-            if raw & 1 != 0 { // LSB bit 0 = 1 = fault during read
-                return Err(Error::MAXError);
+            // Trigger new conversion: Write config (1-SHOT=1 starts it)
+            self.write(Register::CONFIG, self.base_config)?;
+
+            // Wait for conversion (100ms conservative >65ms datasheet min)
+            std::thread::sleep(std::time::Duration::from_millis(100));
+
+            // Read RTD
+            let buffer = self.read_two(Register::RTD_MSB)?;
+            let raw = ((buffer[0] as u16) << 8) | (buffer[1] as u16);
+            if raw & 1 != 0 {  // Fault: Clear + retry once
+                let _ = self.read_fault_status();  // Reads + clears faults
+                // Retry: Trigger again
+                self.write(Register::CONFIG, self.base_config)?;
+                std::thread::sleep(std::time::Duration::from_millis(100));
+                let retry_buffer = self.read_two(Register::RTD_MSB)?;
+                let retry_raw = ((retry_buffer[0] as u16) << 8) | (retry_buffer[1] as u16);
+                if retry_raw & 1 != 0 {
+                    return Err(Error::MAXFault);  // Retry failed
+                }
+                return Ok(retry_raw);
             }
             Ok(raw)
         }
@@ -410,11 +424,11 @@ mod private {
             let mut write_buffer = [0u8; 2];
             write_buffer[0] = reg.read_address(); // Read addr for reg (e.g., 0x81 for 0x01)
             write_buffer[1] = 0; // Dummy data
-            self.ncs.set_low().map_err(|_| Error::GpioError)?;
+            self.ncs.set_low().map_err(|_| Error::GpioFault)?;
             self.spi
                 .transfer(&mut read_buffer, &write_buffer)
                 .map_err(|_| Error::SpiErrorTransfer)?;
-            self.ncs.set_high().map_err(|_| Error::GpioError)?;
+            self.ncs.set_high().map_err(|_| Error::GpioFault)?;
             Ok(read_buffer[1]) // Return result (ignore dummy [0])
         }
 
@@ -429,20 +443,20 @@ mod private {
             write_buffer[0] = reg.read_address(); // Read addr for reg (e.g., 0x81 for 0x01)
             write_buffer[1] = 0; // Dummy for MSB
             write_buffer[2] = 0; // Dummy for LSB
-            self.ncs.set_low().map_err(|_| Error::GpioError)?;
+            self.ncs.set_low().map_err(|_| Error::GpioFault)?;
             self.spi
                 .transfer(&mut read_buffer, &write_buffer)
                 .map_err(|_| Error::SpiErrorTransfer)?;
-            self.ncs.set_high().map_err(|_| Error::GpioError)?;
+            self.ncs.set_high().map_err(|_| Error::GpioFault)?;
             Ok([read_buffer[1], read_buffer[2]]) // Return MSB, LSB (ignore dummy [0])
         }
 
         fn write(&mut self, reg: Register, val: u8) -> Result<(), Error> {
-            self.ncs.set_low().map_err(|_| Error::GpioError)?;
+            self.ncs.set_low().map_err(|_| Error::GpioFault)?;
             self.spi
                 .write(&[reg.write_address(), val])
                 .map_err(|_| Error::SpiErrorTransfer)?;
-            self.ncs.set_high().map_err(|_| Error::GpioError)?;
+            self.ncs.set_high().map_err(|_| Error::GpioFault)?;
             Ok(())
         }
     }
