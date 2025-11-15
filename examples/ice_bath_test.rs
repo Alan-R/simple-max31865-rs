@@ -36,7 +36,7 @@ fn parse_filter_hz(s: &str) -> Result<FilterHz, String> {
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Parse CLI args (simple manual scan for --key value; cargo passes after --)
-    let args: Vec<String> = std::env::args().collect();
+    let args: Vec<String> = env::args().collect();
     let mut cli_cs_pin: Option<u8> = None;
     let mut cli_leads: Option<RTDLeads> = None;
     let mut cli_filter: Option<FilterHz> = None;
@@ -75,7 +75,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Fallback to env vars, then defaults (CLI > env > default)
     let cs_pin_str = cli_cs_pin.map(|p| p.to_string())
         .or_else(|| env::var("MAX31865_CS_PIN").ok())
-        .unwrap_or_else(|| "8".to_string());
+        .unwrap_or_else(|| "24".to_string());
     let cs_pin: u8 = cs_pin_str.parse().map_err(|e| format!("Invalid CS_PIN '{}': {}", cs_pin_str, e))?;
 
     let leads_str = cli_leads.map(|l| match l {
@@ -83,7 +83,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         RTDLeads::Three => "Three".to_string(),
         RTDLeads::Four => "Four".to_string(),
     }).or_else(|| env::var("MAX31865_LEADS").ok())
-        .unwrap_or_else(|| "Three".to_string());
+        .unwrap_or_else(|| "Four".to_string());
     let leads = parse_rtd_leads(&leads_str).map_err(|e| format!("Invalid LEADS '{}': {}", leads_str, e))?;
 
     let filter_str = cli_filter.map(|f| match f {

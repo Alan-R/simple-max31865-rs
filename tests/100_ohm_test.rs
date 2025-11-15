@@ -1,3 +1,4 @@
+// Filename: tests/100_ohm_test.rs
 use std::env;
 #[cfg(any(target_arch = "arm", target_arch = "aarch64"))]
 use simple_max31865::{RTDReader, RTDLeads, FilterHz};
@@ -12,7 +13,6 @@ use simple_max31865::{RTDReader, RTDLeads, FilterHz};
 ///
 ///           (100 ohm resistor)
 ///           +---v\/\/\/\/----+
-///           |                |
 ///           |                |
 ///     +-----+                +-----+
 ///     |     |                |     |
@@ -50,24 +50,25 @@ fn get_pin_or_default(var_name: &str, default: u8) -> u8 {
 
 #[cfg(any(target_arch = "arm", target_arch = "aarch64"))]
 fn setup_driver() -> RTDReader {
-    // Hardcode CS=24, 2-wire (TwoOrFourWire), 50Hz (as original; user can override pin externally if needed)
-    RTDReader::new(24, RTDLeads::Two, FilterHz::Fifty).unwrap()
+    // Hardcode CS=24, 4-wire (Four), 60Hz (defaults; user can override via env vars if needed)
+    let cs_pin = get_pin_or_default("MAX31865_CS_PIN", 24);
+    RTDReader::new(cs_pin, RTDLeads::Four, FilterHz::Sixty).unwrap()
 }
 
 #[test]
 fn test_env_pin_parsing() {
     // Simulate env vars (in real run, set them externally; here we mock via temp override for isolation)
-    std::env::set_var("NCS_PIN", "23");
+    std::env::set_var("MAX31865_CS_PIN", "23");
 
-    let ncs_pin = get_pin_or_default("NCS_PIN", 24);
+    let ncs_pin = get_pin_or_default("MAX31865_CS_PIN", 24);
 
-    assert_eq!(ncs_pin, 23, "Should parse NCS_PIN=23 from env");
+    assert_eq!(ncs_pin, 23, "Should parse MAX31865_CS_PIN=23 from env");
 
     // Reset for cleanliness (optional, but good practice)
-    std::env::remove_var("NCS_PIN");
+    std::env::remove_var("MAX31865_CS_PIN");
 
     // Fallback check
-    let default_ncs = get_pin_or_default("NCS_PIN", 24);
+    let default_ncs = get_pin_or_default("MAX31865_CS_PIN", 24);
     assert_eq!(default_ncs, 24, "Should fallback to 24 if unset");
 }
 
@@ -75,7 +76,7 @@ fn test_env_pin_parsing() {
 #[cfg(any(target_arch = "arm", target_arch = "aarch64"))]
 fn test_configure_one_shot_fails() {
     // Placeholder: Verify new() succeeds for valid params (one-shot is always false in API)
-    let result = RTDReader::new(24, RTDLeads::Two, FilterHz::Fifty);
+    let result = RTDReader::new(24, RTDLeads::Four, FilterHz::Sixty);
     assert!(result.is_ok(), "new() should succeed for valid params (no one-shot)");
     // Internal guard prevents one-shot; tested via code, not direct exposure
 }
