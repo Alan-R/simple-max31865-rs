@@ -81,10 +81,10 @@ pub enum FilterHz {
 #[derive(Debug)]
 /// An enumeration of all the different faults the API can report back.
 pub enum RtdError {
-    InvalidChipSelect,	// The chip select lead given is out of range
-    Init(String),	// Initialization failed
-    Read(String),	// Reading or writing the SPI bus failed
-    Fault(u8),		// An error was reported by the MAX31865
+    InvalidChipSelect, // The chip select lead given is out of range
+    Init(String),      // Initialization failed
+    Read(String),      // Reading or writing the SPI bus failed
+    Fault(u8),         // An error was reported by the MAX31865
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -161,10 +161,10 @@ pub mod temp_conversion;
 
 // Public simplified wrapper API (contains only RTDReader)
 pub mod rtd_reader {
-    use crate::private::{Max31865, Error as InternalError};
+    use crate::private::{Error as InternalError, Max31865};
+    use crate::{FilterHz, RTDLeads, RtdError};
     use rppal::gpio::{Gpio, OutputPin as GpioOutputPin};
-    use rppal::spi::{Spi, Bus, SlaveSelect, Mode as SpiMode};
-    use crate::{RtdError, RTDLeads, FilterHz};  // Root public enum
+    use rppal::spi::{Bus, Mode as SpiMode, SlaveSelect, Spi}; // Root public enum
 
     /// Simplified high-level interface for Raspberry Pi (continuous mode only).
     /// Hides SPI/GPIO setup, RDY pin (unused), and low-level details.
@@ -184,16 +184,23 @@ pub mod rtd_reader {
         /// Configures continuous mode (vbias=true, auto-conversion=true, one-shot=false).
         /// Defaults to 400Ω calibration. RDY pin is not used (can float).
         pub fn new(cs_pin: u8, leads: RTDLeads, filter: FilterHz) -> Result<Self, RtdError> {
-            let gpio = Gpio::new().map_err(|e| RtdError::Init(format!("GPIO init failed: {}", e)))?;
-            let ncs = gpio.get(cs_pin).map_err(|e| RtdError::Init(format!("NCS pin {} invalid: {}", cs_pin, e)))?.into_output_high();
+            let gpio =
+                Gpio::new().map_err(|e| RtdError::Init(format!("GPIO init failed: {}", e)))?;
+            let ncs = gpio
+                .get(cs_pin)
+                .map_err(|e| RtdError::Init(format!("NCS pin {} invalid: {}", cs_pin, e)))?
+                .into_output_high();
             let spi = Spi::new(Bus::Spi0, SlaveSelect::Ss0, 1_000_000, SpiMode::Mode3)
                 .map_err(|e| RtdError::Init(format!("SPI init failed: {}", e)))?;
 
-            let mut inner = Max31865::new(spi, ncs).map_err(|e| RtdError::Init(match e {
-                InternalError::GpioFault => "NCS pin setup failed".to_string(),
-                _ => "MAX31865 init failed".to_string(),
-            }))?;
-            inner.configure(leads, filter)
+            let mut inner = Max31865::new(spi, ncs).map_err(|e| {
+                RtdError::Init(match e {
+                    InternalError::GpioFault => "NCS pin setup failed".to_string(),
+                    _ => "MAX31865 init failed".to_string(),
+                })
+            })?;
+            inner
+                .configure(leads, filter)
                 .map_err(|e| RtdError::Init(format!("Configure failed: {:?}", e)))?;
 
             Ok(RTDReader { inner })
@@ -211,7 +218,9 @@ pub mod rtd_reader {
 
         /// Read temperature as scaled integer (degrees Celsius * 100).
         pub fn read_temp_100(&mut self) -> Result<i32, RtdError> {
-            self.inner.read_default_conversion().map_err(map_internal_error)
+            self.inner
+                .read_default_conversion()
+                .map_err(map_internal_error)
         }
 
         /// Read resistance as scaled integer (ohms * 100).
@@ -236,10 +245,12 @@ pub mod rtd_reader {
 
         /// Clear any latched faults (no-op if none).
         pub fn clear_fault(&mut self) -> Result<(), RtdError> {
-            self.inner.clear_fault().map_err(|e| RtdError::Read(match e {
-                InternalError::SpiErrorTransfer => "Clear fault SPI write failed".to_string(),
-                _ => "Clear fault failed".to_string(),
-            }))
+            self.inner.clear_fault().map_err(|e| {
+                RtdError::Read(match e {
+                    InternalError::SpiErrorTransfer => "Clear fault SPI write failed".to_string(),
+                    _ => "Clear fault failed".to_string(),
+                })
+            })
         }
 
         /// Set calibration (ohms * 100, e.g., 40000 for 400Ω).
@@ -254,7 +265,7 @@ pub mod rtd_reader {
             InternalError::SpiErrorTransfer | InternalError::GpioFault => {
                 RtdError::Read("SPI/GPIO transfer failed".to_string())
             }
-            InternalError::MAXFault => RtdError::Fault(0),  // Placeholder; call read_fault_status() for real status
+            InternalError::MAXFault => RtdError::Fault(0), // Placeholder; call read_fault_status() for real status
         }
     }
 }
@@ -281,7 +292,7 @@ mod private {
         spi: SPI,
         ncs: NCS,
         calibration: u32,
-        base_config: u8,  // Set in configure
+        base_config: u8, // Set in configure
     }
 
     impl<SPI, NCS> Max31865<SPI, NCS>
@@ -298,7 +309,7 @@ mod private {
                 spi,
                 ncs,
                 calibration: default_calibration,
-                base_config: 0,  // Set in configure
+                base_config: 0, // Set in configure
             };
 
             Ok(max31865)
@@ -319,25 +330,24 @@ mod private {
         /// Updates the devices configuration (internal use only).
         pub fn configure(
             &mut self,
-            sensor_type_enum: RTDLeads,  // From public RTDLeads cast
-            filter_mode_enum: FilterHz,   // From public FilterHz cast
+            sensor_type_enum: RTDLeads, // From public RTDLeads cast
+            filter_mode_enum: FilterHz, // From public FilterHz cast
         ) -> Result<(), Error> {
-
             // Compute sensor type and filter mode bits directly
             let sensor_type = match sensor_type_enum {
                 RTDLeads::Three => 1u8,
-                RTDLeads::Two | RTDLeads::Four => 0u8,  // Two or Four = 0
+                RTDLeads::Two | RTDLeads::Four => 0u8, // Two or Four = 0
             };
             let filter_mode = match filter_mode_enum {
-                FilterHz::Fifty => 1u8,  // Fifty = 1 (low order bit)
-                FilterHz::Sixty => 0u8,  // Sixty = 0 (no lower order bits)
+                FilterHz::Fifty => 1u8, // Fifty = 1 (low order bit)
+                FilterHz::Sixty => 0u8, // Sixty = 0 (no lower order bits)
             };
             // One-shot config: V_BIAS=1, 1-SHOT=1, wires, filter (no AUTO= bit 3=0)
             self.base_config = (1u8 << 7)  // V_BIAS=1
                 | (1u8 << 6)  // 1-SHOT=1 (triggers on write)
                 | (sensor_type << 4)  // Wires bit 4
-                | filter_mode;  // Filter bit 0
-            self.write(Register::CONFIG, self.base_config)?;  // Initial write (starts first conversion)
+                | filter_mode; // Filter bit 0
+            self.write(Register::CONFIG, self.base_config)?; // Initial write (starts first conversion)
             self.clear_fault()?; // Unlatch any boot faults (mimics Adafruit init)
 
             Ok(())
@@ -404,15 +414,16 @@ mod private {
             // Read RTD
             let buffer = self.read_two(Register::RTD_MSB)?;
             let raw = ((buffer[0] as u16) << 8) | (buffer[1] as u16);
-            if raw & 1 != 0 {  // Fault: Clear + retry once
-                let _ = self.read_fault_status();  // Reads + clears faults
-                // Retry: Trigger again
+            if raw & 1 != 0 {
+                // Fault: Clear + retry once
+                let _ = self.read_fault_status(); // Reads + clears faults
+                                                  // Retry: Trigger again
                 self.write(Register::CONFIG, self.base_config)?;
                 std::thread::sleep(std::time::Duration::from_millis(100));
                 let retry_buffer = self.read_two(Register::RTD_MSB)?;
                 let retry_raw = ((retry_buffer[0] as u16) << 8) | (retry_buffer[1] as u16);
                 if retry_raw & 1 != 0 {
-                    return Err(Error::MAXFault);  // Retry failed
+                    return Err(Error::MAXFault); // Retry failed
                 }
                 return Ok(retry_raw);
             }
@@ -464,7 +475,8 @@ mod private {
     #[allow(non_camel_case_types)]
     #[allow(dead_code)]
     #[derive(Clone, Copy)]
-    enum Register {    // All the lovely Max31865 register offsets
+    enum Register {
+        // All the lovely Max31865 register offsets
         CONFIG = 0x00,
         RTD_MSB = 0x01,
         RTD_LSB = 0x02,
