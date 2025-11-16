@@ -16,7 +16,7 @@ rppal = { version = "0.17", features = ["embedded-hal"] }  # Enables embedded-ha
 embedded-hal = "1.0"  # Ensure v1
 
 [dev-dependencies]
-clap = { version = "4.0", features = ["derive"] }  # For CLI args in examples
+serial_test = "3.2.0"  # For serial execution of hardware tests (avoids SPI/GPIO conflicts)
 
 [[example]]
 name = "ice_bath_test"
